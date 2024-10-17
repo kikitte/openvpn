@@ -527,6 +527,7 @@ bool openvpn_decrypt(struct buffer *buf, struct buffer work,
  */
 bool crypto_check_replay(struct crypto_options *opt,
                          const struct packet_id_net *pin,
+                         uint16_t epoch,
                          const char *error_prefix,
                          struct gc_arena *gc);
 
