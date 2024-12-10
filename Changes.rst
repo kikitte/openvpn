@@ -22,6 +22,11 @@ Support for tun/tap via unix domain socket and lwipovpn support
 
     For more details see [lwipovpn on Gihtub](https://github.com/OpenVPN/lwipovpn).
 
+Default ciphers in ``--data-ciphers``
+    Ciphers in ``--data-ciphers`` can contain the string DEFAULT that is
+    replaced by the default ciphers used by OpenVPN, making it easier to
+    add an allowed cipher without having to spell out the default ciphers.
+
 Deprecated features
 -------------------
 ``secret`` support has been removed by default.
