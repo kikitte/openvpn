@@ -181,6 +181,8 @@ struct key_ctx
      * with the current key in number of 128 bit blocks (only used for
      * AEAD ciphers) */
     uint64_t plaintext_blocks;
+    /** number of failed verification using this cipher */
+    uint64_t failed_verifications;
 };
 
 #define KEY_DIRECTION_BIDIRECTIONAL 0 /* same keys for both directions */
@@ -621,6 +623,29 @@ create_kt(const char *cipher, const char *md, const char *optname)
  */
 uint64_t
 cipher_get_aead_limits(const char *ciphername);
+
+/**
+ * Check if the number of failed decryption is over the acceptable limit.
+ * We
+ */
+static inline bool
+cipher_decrypt_verify_fail_exceeded(const struct key_ctx *ctx)
+{
+    /* Use 2**36, same as TLS 1.3 */
+    return ctx->failed_verifications >  (1ull << 36);
+}
+
+/**
+ * Check if the number of failed decryption is approaching the limit and we
+ * should try to move to a new key
+ */
+static inline bool
+cipher_decrypt_verify_fail_warn(const struct key_ctx *ctx)
+{
+    /* Use 2**35, half the amount after which we refuse to decrypt */
+    return ctx->failed_verifications >  (1ull << 35);
+}
+
 
 /**
  * Blocksize used for the AEAD limit caluclation

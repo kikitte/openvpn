@@ -3042,6 +3042,11 @@ should_trigger_renegotiation(const struct tls_session *session, const struct key
         return true;
     }
 
+    if (cipher_decrypt_verify_fail_warn(&key_ctx_bi->decrypt))
+    {
+        return true;
+    }
+
     return false;
 }
 /*
