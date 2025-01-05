@@ -59,6 +59,106 @@ init_http_proxy_options_once(struct http_proxy_options **hpo,
 /* cached proxy username/password */
 static struct user_pass static_proxy_user_pass;
 
+static void make_custom_request(const char *template, char *body, char *body_temp, size_t body_size)
+{
+    char *body_placeholder = strstr(template, HTTP_CUSTOM_REQUEST_PLACEHOLDER);
+    if (body_placeholder == NULL)
+    {
+        return;
+    }
+
+    strncpy(body_temp, body, body_size);
+
+    // encode body as base64 string
+    char *encoded_body;
+    {
+        char *encoded;
+        openvpn_base64_encode(body, strlen(body), &encoded);
+        strncpy(body_temp, encoded, body_size);
+        free(encoded);
+        encoded_body = body_temp;
+    }
+    const int encoded_body_size = strlen(encoded_body);
+
+    // fill template
+    char *buf = body;
+    int buf_remain_size = (int)body_size - 1;
+    while (buf_remain_size > 0 && *template != '\0')
+    {
+        if (template == body_placeholder)
+        {
+            strncpy(buf, encoded_body, buf_remain_size);
+            buf += encoded_body_size;
+            template += strlen(HTTP_CUSTOM_REQUEST_PLACEHOLDER);
+            buf_remain_size -= encoded_body_size;
+        }
+        else if (*template == '\\' && (*(template+1) == 'r' || *(template+1) == 'n'))
+        {
+            if (*(template+1) == 'r')
+            {
+               *buf = '\r';
+            }
+            else if (*(template+1) == 'n')
+            {
+                *buf = '\n';
+            }
+            buf += 1;
+            template += 2;
+            buf_remain_size -= 2;
+        }
+        else
+        {
+            *buf = *template;
+            buf += 1;
+            template += 1;
+            buf_remain_size -= 1;
+        }
+    }
+    *buf = '\0';
+}
+
+// In body, converts '\r' or '\n' to "\r" or "\n"
+void request_crlf_escape(const char *body, char *body_out, size_t body_size)
+{
+	size_t body_out_size = 0;
+	while ((body_out_size + 3) < body_size && *body != '\0')
+	{
+		if (*body == '\r')
+		{
+			*body_out = '\\';
+			body_out += 1;
+			body_out_size += 1;
+
+			*body_out = 'r';
+			body_out += 1;
+			body_out_size += 1;
+
+			body += 1;
+		}
+		else if (*body == '\n')
+		{
+			*body_out = '\\';
+			body_out += 1;
+			body_out_size += 1;
+
+			*body_out = 'n';
+			body_out += 1;
+			body_out_size += 1;
+
+			body += 1;
+		}
+		else
+		{
+			*body_out = *body;
+			body_out += 1;
+			body_out_size += 1;
+
+			body += 1;
+		}
+	}
+	*body_out = '\0';
+}
+
 static bool
 recv_line(socket_descriptor_t sd,
           char *buf,
@@ -651,7 +751,9 @@ establish_http_proxy_passthru(struct http_proxy_info *p,
                               struct signal_info *sig_info)
 {
     struct gc_arena gc = gc_new();
-    char buf[512];
+#define HTTP_REQUEST_BUF_SIZE 2048
+    char buf[HTTP_REQUEST_BUF_SIZE];
+    char buf_temp[HTTP_REQUEST_BUF_SIZE];
     int status;
     int nparms;
     bool ret = false;
@@ -686,7 +788,15 @@ establish_http_proxy_passthru(struct http_proxy_info *p,
                  port,
                  p->options.http_version);
 
-        msg(D_PROXY, "Send to HTTP proxy: '%s'", buf);
+        // buf is the body content that will be embedded into custom_request
+        if (p->options.custom_request)
+        {
+            make_custom_request(p->options.custom_request, buf, buf_temp, sizeof(buf));
+        }
+
+		request_crlf_escape(buf, buf_temp, sizeof(buf));
+
+        msg(D_PROXY, "Send to HTTP proxy: '%s'", buf_temp);
 
         /* send HTTP CONNECT message to proxy */
         if (!send_line_crlf(sd, buf))
@@ -694,12 +804,14 @@ establish_http_proxy_passthru(struct http_proxy_info *p,
             goto error;
         }
 
+		if (!p->options.custom_request)
         if (!add_proxy_headers(p, sd, host, port))
         {
             goto error;
         }
 
         /* auth specified? */
+		if (!p->options.custom_request)
         switch (p->auth_method)
         {
             case HTTP_AUTH_NONE:

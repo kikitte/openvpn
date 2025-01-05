@@ -153,6 +153,7 @@ static const char usage_message[] =
     "                                  Repeat to set multiple options.\n"
     "                  VERSION version (default=1.0)\n"
     "                  AGENT user-agent\n"
+    "--http-proxy-custom-request 'GET xxxx...[BODY]xxxxx...': Customize http proxy request content."
     "--socks-proxy s [p] [up] : Connect to remote host through a Socks5 proxy at\n"
     "                  address s and port p (default port = 1080).\n"
     "                  If proxy authentication is required,\n"
@@ -6866,6 +6867,22 @@ add_option(struct options *options,
         VERIFY_PERMISSION(OPT_P_GENERAL|OPT_P_CONNECTION);
         msg(M_WARN, "DEPRECATED OPTION: http-proxy-timeout: In OpenVPN 2.4 the timeout until a connection to a "
             "server is established is managed with a single timeout set by connect-timeout");
+    }
+    else if(streq(p[0], "http-proxy-custom-request") && p[1] && !p[2])
+    {
+        struct http_proxy_options *ho;
+
+        VERIFY_PERMISSION(OPT_P_GENERAL|OPT_P_CONNECTION);
+        ho = init_http_proxy_options_once(&options->ce.http_proxy_options, &options->gc);
+
+        ho->custom_request = p[1];
+        const char *found = strstr(ho->custom_request, HTTP_CUSTOM_REQUEST_PLACEHOLDER);
+        if (!found)
+        {
+            ho->custom_request = NULL;
+            msg(msglevel, "No body placeholder in custom request configuration.");
+            goto err;
+        }
     }
     else if (streq(p[0], "http-proxy-option") && p[1] && !p[4])
     {

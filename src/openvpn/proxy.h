@@ -41,6 +41,7 @@ struct http_custom_header {
 };
 
 #define MAX_CUSTOM_HTTP_HEADER 10
+#define HTTP_CUSTOM_REQUEST_PLACEHOLDER "[BODY]"
 struct http_proxy_options {
     const char *server;
     const char *port;
@@ -59,6 +60,7 @@ struct http_proxy_options {
     bool inline_creds; /* auth_file_up is inline credentials */
     bool first_time; /* indicates if we need to wipe user creds at the first iteration of the main loop */
     bool nocache;
+    const char *custom_request;
 };
 
 struct http_proxy_info {
